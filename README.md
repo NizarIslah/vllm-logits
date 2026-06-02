@@ -90,11 +90,12 @@ plus `torch`, `transformers`, and `pyarrow`/`polars`.
 - **Feature extraction** (`features.py`, the `cache_logits` stage): for each failed rollout it runs
   two batched prefills and stores per-token features — the specialist↔ancestor divergence on the
   taken token (`Delta_path`), coverage-set divergence (`G_cov`), logit variance / entropy, local KL,
-  and a combined `J_approx` whose peak anchors the **junction** (the window of tokens where the
-  failure was decided).
-- **Repair** (`repair.py`, the `repair_logits` stage): at the junction it applies each operator
-  (sparse steer at the junction, random-position steer, dense steer over the whole trace, local
-  temperature) and re-decodes, reporting whether the result is correct at each `k`.
+  and a combined `J_approx`. The **junction** is the window of tokens (around the `J_approx` peak)
+  where the failure was decided; it is where the targeted operators act.
+- **Repair** (`repair.py`, the `repair_logits` stage): it applies each operator and re-decodes —
+  sparse logit steering and local temperature lift fire **at the junction**, random-position steer
+  at a control position, and dense steer over the whole trace — reporting whether the result is
+  correct at each `k`.
 
 ### `continuation_mode`
 
