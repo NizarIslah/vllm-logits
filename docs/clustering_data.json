@@ -1,0 +1,247 @@
+[
+  {
+    "pid": "p1",
+    "feats": [
+      0.94140625,
+      1.4205950310283506,
+      -0.5809346432456906
+    ],
+    "rescuers": [
+      "retry",
+      "sparse steer",
+      "dense steer",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p10",
+    "feats": [
+      0.958984375,
+      1.3378518499719039,
+      -0.6997044707414738
+    ],
+    "rescuers": [
+      "retry",
+      "sparse steer"
+    ]
+  },
+  {
+    "pid": "p11",
+    "feats": [
+      0.9056919642857143,
+      1.3749125620884308,
+      -0.7631108226503394
+    ],
+    "rescuers": [
+      "retry",
+      "sparse steer",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p12",
+    "feats": [
+      0.9341517857142857,
+      1.391607355779832,
+      -0.8226459891915532
+    ],
+    "rescuers": [
+      "retry",
+      "sparse steer",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p14",
+    "feats": [
+      0.9401041666666666,
+      1.4272417778729547,
+      -0.9140369933964414
+    ],
+    "rescuers": [
+      "retry",
+      "sparse steer",
+      "dense steer",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p15",
+    "feats": [
+      0.9263392857142857,
+      1.351188346469772,
+      -1.0981806006197052
+    ],
+    "rescuers": [
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p16",
+    "feats": [
+      0.93505859375,
+      1.5585229325777674,
+      -0.7398760192640654
+    ],
+    "rescuers": []
+  },
+  {
+    "pid": "p17",
+    "feats": [
+      0.89599609375,
+      1.4904224346388897,
+      -1.0331655875205445
+    ],
+    "rescuers": []
+  },
+  {
+    "pid": "p18",
+    "feats": [
+      0.9544270833333334,
+      1.4916799175732447,
+      -0.45604233495178015
+    ],
+    "rescuers": [
+      "sparse steer",
+      "dense steer",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p19",
+    "feats": [
+      0.9384765625,
+      1.4988968493171515,
+      -0.8790046433988838
+    ],
+    "rescuers": []
+  },
+  {
+    "pid": "p2",
+    "feats": [
+      0.921875,
+      1.5628169653373163,
+      -0.8203854170839217
+    ],
+    "rescuers": [
+      "retry",
+      "sparse steer",
+      "dense steer",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p20",
+    "feats": [
+      0.9207589285714286,
+      1.4461918944988719,
+      -0.6967803237005727
+    ],
+    "rescuers": [
+      "retry",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p21",
+    "feats": [
+      0.94482421875,
+      1.4501346247910627,
+      -0.7951296709693496
+    ],
+    "rescuers": []
+  },
+  {
+    "pid": "p3",
+    "feats": [
+      0.9599609375,
+      1.4054413791587748,
+      -0.7911519938902442
+    ],
+    "rescuers": [
+      "retry",
+      "sparse steer",
+      "dense steer",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p4",
+    "feats": [
+      0.9169921875,
+      1.501392876835317,
+      -0.6938101446145053
+    ],
+    "rescuers": [
+      "sparse steer",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p5",
+    "feats": [
+      0.9140625,
+      1.4179468641810775,
+      -0.828635177211741
+    ],
+    "rescuers": [
+      "retry",
+      "sparse steer",
+      "dense steer",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p6",
+    "feats": [
+      0.9322916666666666,
+      1.514060308786748,
+      -0.6150888844074147
+    ],
+    "rescuers": [
+      "retry",
+      "sparse steer",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p7",
+    "feats": [
+      0.919921875,
+      1.2212510483814665,
+      -1.0656051961217767
+    ],
+    "rescuers": [
+      "retry",
+      "sparse steer",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p8",
+    "feats": [
+      0.90546875,
+      1.279667415451005,
+      -0.6049361544380305
+    ],
+    "rescuers": [
+      "retry",
+      "sparse steer",
+      "local temperature lift"
+    ]
+  },
+  {
+    "pid": "p9",
+    "feats": [
+      0.9365234375,
+      1.6035397847680861,
+      -0.6825034012552572
+    ],
+    "rescuers": [
+      "retry",
+      "sparse steer",
+      "dense steer",
+      "local temperature lift"
+    ]
+  }
+]

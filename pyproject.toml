@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vllm-logits"
+version = "0.1.0"
+description = "Standalone dual-model logit-intervention toolkit for vLLM (mixing + cache_logits + repair_logits, any model / any task)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Nizar Islah" }]
+keywords = ["vllm", "logits", "proxy-tuning", "logit-mixing", "interpretability", "llm"]
+
+dependencies = [
+    "vllm>=0.15,<0.16",
+    "torch",
+    "transformers",
+    "pyarrow",
+    "polars",
+    "numpy",
+    "safetensors",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "huggingface_hub",
+]
+
+# vLLM auto-calls this in EVERY process (main engine + spawned EngineCore workers),
+# so the dual backbones register without the user calling register_*() — and
+# critically so the registration propagates to multiprocessing workers.
+[project.entry-points."vllm.general_plugins"]
+vllm_logits_register = "vllm_logits.register:register_all"
+
+[project.urls]
+Homepage = "https://github.com/NizarIslah/vllm-logits"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
