@@ -90,8 +90,9 @@ plus `torch`, `transformers`, and `pyarrow`/`polars`.
 - **Feature extraction** (`features.py`, the `cache_logits` stage): for each failed rollout it runs
   two batched prefills and stores per-token features — the specialist↔ancestor divergence on the
   taken token (`Delta_path`), coverage-set divergence (`G_cov`), logit variance / entropy, local KL,
-  and a combined `J_approx`. The **junction** is the window of tokens (around the `J_approx` peak)
-  where the failure was decided; it is where the targeted operators act.
+  and a combined `J_approx` (every feature is defined in
+  [docs/logit-features.md](docs/logit-features.md)). The **junction** is the window of tokens
+  (around the `J_approx` peak) where the failure was decided; it is where the targeted operators act.
 - **Repair** (`repair.py`, the `repair_logits` stage): it applies each operator and re-decodes —
   sparse logit steering and local temperature lift fire **at the junction**, random-position steer
   at a control position, and dense steer over the whole trace — reporting whether the result is
@@ -187,7 +188,7 @@ set `VLLM_LOGITS_FORCE=1` to recompute.
 | `backbones.py` | `DualQwen2/Llama/Phi3ForCausalLM` (+ a repair variant): two checkpoints in one vLLM model, mixable logits. |
 | `processors/` | `inject`, `proxy_tuning`, `cross_arch`, `logit_repair` (the steering processor with `continuation_mode`). |
 | `register.py` | `register_dual_{qwen,llama,phi3}` — vLLM ModelRegistry shims (auto-loaded, see below). |
-| `features.py` | `cache_logits`: per-token features (`Delta_path`, `G_cov`, `logit_var`, `entropy`, `kl_div`, `J_approx`, …) via two batched prefills. |
+| `features.py` | `cache_logits`: per-token features (`Delta_path`, `G_cov`, `logit_var`, `entropy`, `kl_div`, `J_approx`; defined in [docs/logit-features.md](docs/logit-features.md)) via two batched prefills. |
 | `scoring.py` | `compute_scores_at_t`, `estimate_background`, and reference (HF) engines. |
 | `junctions.py` | junction detectors (Page-Hinkley, divergence, coverage, random) + offline firing on cached features. |
 | `repair.py` | `LogitRepairEngine`: batched operator × `k` sweep. |
