@@ -242,14 +242,16 @@ after a vLLM upgrade — if they stay green, the version is supported.
 
 ## Citation
 
-If you use `vllm-logits`, please cite the accompanying paper (to appear):
+If you use `vllm-logits`, please cite the accompanying paper:
 
 ```bibtex
 @misc{islah2026failedreasoningtraces,
-  title  = {Failed Reasoning Traces Tell You What Is Fixable (But Not by Reading Them)},
-  author = {Islah, Nizar and others},
-  year   = {2026},
-  note   = {Preprint; arXiv TBD},
+  title         = {Failed Reasoning Traces Tell You What Is Fixable (But Not by Reading Them)},
+  author        = {Islah, Nizar and others},
+  year          = {2026},
+  eprint        = {2606.05145},
+  archivePrefix = {arXiv},
+  url           = {https://arxiv.org/abs/2606.05145},
 }
 ```
 
