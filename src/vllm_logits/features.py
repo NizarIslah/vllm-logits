@@ -32,7 +32,6 @@ from typing import Dict, List, Optional
 import numpy as np
 import torch
 from transformers import AutoTokenizer
-from vllm import LLM, SamplingParams
 
 from .storage import LogitStore
 
@@ -99,6 +98,11 @@ class VllmCacheLogitsEngine:
         )
         if self.max_model_len is not None:
             llm_kwargs["max_model_len"] = self.max_model_len
+        # Imported here, not at module scope: the per-token feature math and the cache
+        # round-trip are testable with torch alone, and this module should stay importable
+        # without vLLM installed.
+        from vllm import LLM, SamplingParams
+
         llm = LLM(**llm_kwargs)
         # vLLM V1 returns raw T=1 logprobs; temperature rescaling is applied
         # post-hoc in _compute_feature_tensors via logsumexp over top-K.
