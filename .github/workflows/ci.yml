@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tier0:
+    # The point of this job: prove the light path stays light. It installs the package with NO
+    # extras, so if anything that should be Tier 0 starts needing torch or vLLM, this goes red.
+    name: Tier 0 (numpy only)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install (core only — no extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . pytest
+      - name: Import must not pull torch or vLLM
+        run: |
+          python - <<'PY'
+          import sys, vllm_logits
+          assert "torch" not in sys.modules, "importing vllm_logits pulled in torch"
+          assert "vllm" not in sys.modules, "importing vllm_logits pulled in vLLM"
+          print("vllm_logits", vllm_logits.__version__, "imported with numpy alone")
+          PY
+      - name: Missing extras must fail with an actionable message
+        run: |
+          python - <<'PY'
+          import vllm_logits
+          for sym in ("LogitStore", "LogitPipeline"):
+              try:
+                  getattr(vllm_logits, sym)
+              except ImportError as e:
+                  assert "vllm-logits[engine]" in str(e), str(e)
+              else:
+                  raise AssertionError(f"{sym} imported without the engine extra")
+          print("lazy-import errors name the fix")
+          PY
+      - name: Tier-0 tests
+        run: pytest tests/test_routing.py tests/test_demo.py -q
+
+  boundary:
+    name: Import boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python tools/check_import_boundary.py
+
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check src tools tests
+
+  storage:
+    name: Storage round-trip (torch, CPU)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install torch (CPU wheels) — vLLM is not needed for this test
+        run: |
+          python -m pip install --upgrade pip
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install -e . pytest pyarrow polars safetensors
+      - run: pytest tests/test_cache_logits_parquet.py -q

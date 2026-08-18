@@ -1,5 +1,9 @@
 # vllm-logits
 
+[![CI](https://github.com/NizarIslah/vllm-logits/actions/workflows/ci.yml/badge.svg)](https://github.com/NizarIslah/vllm-logits/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![arXiv](https://img.shields.io/badge/arXiv-2606.05145-b31b1b.svg)](https://arxiv.org/abs/2606.05145)
+
 **A toolkit for two-model logit interventions on top of [vLLM](https://github.com/vllm-project/vllm).**
 
 It loads two models — a *specialist* (e.g. your fine-tune) and an *ancestor* (e.g. its
@@ -40,15 +44,39 @@ results = pipe.run(
 # You can also call the two stages separately: pipe.cache_logits(...) then pipe.repair(...).
 ```
 
+## Try it in one minute, with no GPU
+
+```bash
+pip install git+https://github.com/NizarIslah/vllm-logits
+python -m vllm_logits.demo
+```
+
+That installs numpy and nothing else, and runs on 1,423 real failed problems shipped with the package
+(four post-trained models, three tasks — see
+[`src/vllm_logits/data/README.md`](src/vllm_logits/data/README.md)). It prints how many failures are
+worth more sampling, how many need a different intervention, how many are beyond reach, and whether
+routing each failure by its features beats committing to one intervention. Add
+`--plot panel.png` (with `pip install "vllm-logits[demo]"`) for the figure, or `--cell <cell>` to look
+at one model×task at a time.
+
 ## Install
 
 ```bash
-pip install -e .          # core
-pip install -e ".[dev]"   # + pytest, huggingface_hub (for the tests)
+pip install git+https://github.com/NizarIslah/vllm-logits              # core: numpy only
+pip install "git+https://github.com/NizarIslah/vllm-logits#egg=vllm-logits[engine]"   # + vLLM/torch
 ```
 
-Requires **Python ≥ 3.10** and **`vllm` 0.15.x** (pinned — see [Compatibility](#compatibility)),
-plus `torch`, `transformers`, and `pyarrow`/`polars`.
+| install | needs | gives you |
+|---|---|---|
+| core | numpy | `route()` on your own features, the input contract, `python -m vllm_logits.demo` |
+| `[engine]` | + vLLM 0.15.x, torch, transformers | `LogitPipeline` — loading models, extracting features, running operators |
+| `[demo]` | + matplotlib | the demo's figure |
+| `[dev]` | + pytest | the test suite |
+
+Requires **Python ≥ 3.10**; the engine extra pins **`vllm` 0.15.x** (see
+[Compatibility](#compatibility)). `import vllm_logits` never imports torch or vLLM, so the core
+install stays laptop-light; asking for an engine symbol without the extra raises an error naming the
+install command. Not on PyPI yet.
 
 ## How it works
 
@@ -196,6 +224,8 @@ set `VLLM_LOGITS_FORCE=1` to recompute.
 | `repair.py` | `LogitRepairEngine`: batched operator × `k` sweep. |
 | `storage.py` | `LogitStore` — feature cache as `.pt` or parquet shards, format auto-detected on read. |
 | `io.py` | the input contract: `Problem`/`Rollout` dicts, JSONL helpers, and `exact_match` / `numeric_answer` / `regex` correctness defaults. |
+| `routing.py` | `route`, `route_scores`, `RoutingPolicy` — the feature→operator rule, pure numpy (no vLLM, no GPU). |
+| `demo.py` | `python -m vllm_logits.demo` — the worked example on shipped data. |
 | `alpha.py` | `entropy_gap`, `chi2_divergence`, `adaptive_alpha`. |
 | `_compat.py` | every vLLM-internal import, isolated in one place (the version-bump firewall). |
 
@@ -206,6 +236,8 @@ backbones are registered in every vLLM process (including spawned workers) witho
 ## Tests
 
 ```bash
+pytest tests/test_routing.py tests/test_demo.py     # no GPU, no torch, no vLLM
+python tools/check_import_boundary.py               # the dependency boundary (also in CI)
 PYTHONPATH=src python -m pytest tests/test_cache_logits_parquet.py        # CPU: cache round-trip
 # GPU: confirm the dual backbones load and reproduce exact greedy outputs:
 export VLLM_WORKER_MULTIPROC_METHOD=spawn NCCL_IB_DISABLE=1 NCCL_P2P_DISABLE=1
@@ -227,6 +259,10 @@ families:
 
 Qwen and Phi are verified end-to-end on GPU; Llama and OLMo run through the same backbone code path.
 Anything not listed takes a one-time addition — see below.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for how the dual load, the worker-safe registration, the
+feature extraction and the two firewalls actually work, and
+[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## Adding a new architecture
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vllm-logits"
-version = "0.1.0"
+version = "0.2.0"
 description = "Standalone dual-model logit-intervention toolkit for vLLM (mixing + cache_logits + repair_logits, any model / any task)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,20 +12,29 @@ license = { text = "Apache-2.0" }
 authors = [{ name = "Nizar Islah" }]
 keywords = ["vllm", "logits", "proxy-tuning", "logit-mixing", "interpretability", "llm"]
 
+# Core stays laptop-light on purpose: routing, the input contract and the demo run with
+# numpy alone, so `import vllm_logits` costs nothing and needs no GPU. Everything that
+# touches a model lives in the `engine` extra.
 dependencies = [
-    "vllm>=0.15,<0.16",
-    "torch",
-    "transformers",
-    "pyarrow",
-    "polars",
     "numpy",
-    "safetensors",
 ]
 
 [project.optional-dependencies]
+# Anything that loads a model, extracts features, or runs an operator.
+engine = [
+    "vllm>=0.15,<0.16",
+    "torch",
+    "transformers",
+    "huggingface_hub",   # resolving an HF repo id to a local snapshot (pipeline/repair)
+    "pyarrow",
+    "polars",
+    "safetensors",
+]
+demo = [
+    "matplotlib",
+]
 dev = [
     "pytest",
-    "huggingface_hub",
 ]
 
 # vLLM auto-calls this in EVERY process (main engine + spawned EngineCore workers),
@@ -40,5 +49,28 @@ Homepage = "https://github.com/NizarIslah/vllm-logits"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+vllm_logits = ["data/*.csv"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# Deliberately narrow. This code backs published numbers, so lint is here to catch *bugs*
+# (undefined names, unused imports, shadowed definitions), not to impose a style migration on
+# the operator and backbone modules. Widen only with a reason.
+select = ["F", "E4", "E7", "E9"]
+
+[tool.ruff.lint.per-file-ignores]
+# These two tests must call register_dual_*() BEFORE importing the modules that consume the
+# registry, so their imports are deliberately not at the top of the file. Reordering them
+# would break the test rather than tidy it.
+"tests/test_dual_load_qwen.py" = ["E402"]
+"tests/test_dual_load_phi4.py" = ["E402"]
+"tests/test_cache_logits_parquet.py" = ["E702", "F541"]
+"src/vllm_logits/alpha.py" = ["E402"]
+"src/vllm_logits/features.py" = ["E702"]

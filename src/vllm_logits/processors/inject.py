@@ -55,7 +55,15 @@ class InjectionLogitsProcessor(AdapterLogitsProcessor):
         min_p_val = params.extra_args.get("inject_min_p", 0.0)
         top_p_val = params.extra_args.get("inject_top_p", 1.0)
         reppen_val = params.extra_args.get("inject_reppen", 1.0)
-        top_k = params.extra_args.get("inject_top_k", None)
+        # `inject_top_k` was read here but never applied, so setting it silently did nothing.
+        # Fail loudly instead: min_p / top_p / repetition penalty are supported at the injected
+        # position, top-k is not. Implementing it belongs with a GPU to verify against.
+        if params.extra_args.get("inject_top_k") is not None:
+            raise ValueError(
+                "inject_top_k is not supported at the injected position (it was previously "
+                "accepted and ignored). Use inject_top_p or inject_min_p, or open an issue if "
+                "you need top-k filtering here."
+            )
 
         # Junction timing: [t_start, t_start + w)
         t_start = task.get("step", 0)

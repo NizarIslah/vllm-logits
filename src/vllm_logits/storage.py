@@ -9,7 +9,6 @@ Readers (`load_feature_cache`, `iter_feature_rollouts`) auto-detect per cell.
 """
 import torch
 import json
-import os
 from pathlib import Path
 from typing import Optional, List, Tuple
 from safetensors.torch import save_file, load_file
