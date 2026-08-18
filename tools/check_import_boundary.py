@@ -5,7 +5,7 @@ Why this exists
 ---------------
 This package is meant to stay usable as a library: importable on a laptop, embeddable in someone
 else's pipeline, and free of any assumption about how *we* run experiments. That property is easy to
-state and easy to lose — one convenient import of a config framework or an experiment-harness helper
+state and easy to lose. One convenient import of a config framework or an experiment-harness helper
 and it is gone. This check makes the boundary mechanical.
 
 Rules
@@ -31,7 +31,7 @@ ALLOWED = {
     "matplotlib",  # demo plotting only, imported inside a function
 }
 
-#: Modules that must import with numpy alone — no torch, no vLLM.
+#: Modules that must import with numpy alone: no torch, no vLLM.
 TIER0 = {"routing.py", "io.py", "demo.py", "__init__.py"}
 TIER0_FORBIDDEN = {"torch", "vllm", "transformers", "safetensors", "polars", "pyarrow"}
 
@@ -68,7 +68,7 @@ def check_file(path: Path) -> list[str]:
         for mod, line in mods:
             where = f"{path.name}:{line}"
             if mod in FORBIDDEN_ALWAYS:
-                errs.append(f"{where}: forbidden import {mod!r} — that belongs to the caller, "
+                errs.append(f"{where}: forbidden import {mod!r}. That belongs to the caller, "
                             f"not to this library")
             elif mod in STDLIB or mod == "vllm_logits":
                 continue
@@ -83,7 +83,7 @@ def check_file(path: Path) -> list[str]:
         # os.environ["SFR_..."] / os.getenv("SCRATCH") style reads
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             if node.value.startswith(FORBIDDEN_ENV_PREFIXES) and node.value.isupper():
-                errs.append(f"{path.name}:{node.lineno}: references {node.value!r} — a private "
+                errs.append(f"{path.name}:{node.lineno}: references {node.value!r}, a private "
                             f"harness env var. Take a path or value as an argument instead.")
     return errs
 
@@ -101,7 +101,7 @@ def main() -> int:
         print("\nThis library must stay embeddable: no config framework, no harness modules, "
               "no private env vars, and Tier 0 stays numpy-only.")
         return 1
-    print(f"import boundary OK — {len(files)} modules, "
+    print(f"import boundary OK: {len(files)} modules, "
           f"{len(TIER0)} of them Tier 0 (numpy-only).")
     return 0
 

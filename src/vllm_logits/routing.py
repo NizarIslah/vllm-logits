@@ -7,10 +7,10 @@ Three trajectory features, each measuring one thing an operator class can act on
     logit_dispersion  how strongly the token responds to temperature     -> local temperature lift
 
 The rule z-scores the three features across the population and routes each failure to the operator
-whose feature is largest. It is *prospective*: it reads only the failed generation, never the outcome
-of any repair attempt, so it is usable at deployment time on failures you have not tried to fix yet.
+whose feature is largest. It is prospective: it reads only the failed generation, never the outcome of
+any repair attempt, so it is usable at deployment time on failures you have not tried to fix yet.
 
-This module is Tier 0 — numpy only, no vLLM, no GPU. You can route failures on a laptop from features
+This module is Tier 0: numpy only, no vLLM, no GPU. You can route failures on a laptop from features
 you extracted elsewhere.
 
     from vllm_logits import route

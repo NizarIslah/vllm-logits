@@ -1,4 +1,4 @@
-"""The worked example, on shipped data — no GPU, no model download, no torch.
+"""The worked example, on shipped data. No GPU, no model download, no torch.
 
     python -m vllm_logits.demo                 # all cells
     python -m vllm_logits.demo --cell sft0p6b|gsm8k
@@ -57,8 +57,8 @@ def load(path: Path = DATA) -> dict[str, np.ndarray]:
 def classify(d: dict[str, np.ndarray]) -> np.ndarray:
     """Label every failure: 'resample', 'steerable' or 'beyond reach'.
 
-    steerable     resampling is inadequate AND some intervention beats it by >= 5 pp
-                  -- the population where choosing an intervention can pay off
+    steerable     resampling is inadequate AND some intervention beats it by >= 5 pp.
+                  This is the population where choosing an intervention can pay off
     beyond reach  no intervention rescues it at all
     resample      neither: plain resampling already gets there
     """
@@ -84,16 +84,16 @@ def _select(d: dict[str, np.ndarray], cell: str | None) -> tuple[dict[str, np.nd
 
 
 def taxonomy(d: dict[str, np.ndarray], cell: str | None = None) -> dict:
-    """Part 1 — of the failures, which are worth more compute at all?"""
+    """Part 1: of the failures, which are worth more compute at all?"""
     sub, n = _select(d, cell)
     labels = classify(sub)
     scope = "all cells" if cell is None else cell
     print(f"\n{'='*78}\n  Failed generations: what is worth more compute?   [{scope}, n={n}]\n{'='*78}\n")
     counts = Counter(labels)
     for name, blurb in (
-        ("resample", "plain resampling already gets there — spend samples"),
-        ("steerable", "resampling stalls, but an intervention rescues it — spend them differently"),
-        ("beyond reach", "nothing we tried rescues it — stop spending"),
+        ("resample", "plain resampling already gets there, so spend samples"),
+        ("steerable", "resampling stalls, but an intervention rescues it: spend differently"),
+        ("beyond reach", "nothing we tried rescues it, so stop spending"),
     ):
         c = counts.get(name, 0)
         print(f"  {name:<13} {_bar(c/n)}  {100*c/n:4.1f}%  ({c:4d})   {blurb}")
@@ -101,7 +101,7 @@ def taxonomy(d: dict[str, np.ndarray], cell: str | None = None) -> dict:
 
 
 def routing_report(d: dict[str, np.ndarray], cell: str | None = None) -> dict:
-    """Part 2 — for the steerable ones, does per-failure routing beat one fixed choice?"""
+    """Part 2: for the steerable ones, does per-failure routing beat one fixed choice?"""
     sub, _ = _select(d, cell)
     labels = classify(sub)
     steer = labels == "steerable"
@@ -110,7 +110,7 @@ def routing_report(d: dict[str, np.ndarray], cell: str | None = None) -> dict:
     print(f"\n{'-'*78}\n  Which intervention?   [{scope}, {int(steer.sum())} steerable failures]\n{'-'*78}")
     ops = route(st)
     z = route_scores(st)
-    print("\n  Routed from trace features alone — no repair outcomes used.\n")
+    print("\n  Routed from trace features alone. No repair outcomes used.\n")
     print(f"  {'routed to':<28}{'n':>5}   {'spread':>8}{'concentr.':>11}{'dispersion':>12}")
     for op in RoutingPolicy().operators + [RoutingPolicy().fallback]:
         m = ops == op
@@ -119,7 +119,7 @@ def routing_report(d: dict[str, np.ndarray], cell: str | None = None) -> dict:
         print(f"  {PRETTY.get(op, op):<28}{int(m.sum()):>5}   "
               f"{z['spread'][m].mean():>8.2f}{z['concentration'][m].mean():>11.2f}"
               f"{z['logit_dispersion'][m].mean():>12.2f}")
-    print("\n  Each group's own signature feature is highest — that is the rule working.")
+    print("\n  Each group's own signature feature is highest. That is the rule working.")
 
     # --- routed vs. committing to one intervention everywhere ---
     routed = np.array([st[o][i] for i, o in enumerate(ops)])

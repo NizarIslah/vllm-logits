@@ -1,4 +1,4 @@
-"""vllm-logits — decide whether a failed generation is worth more compute, and what to spend it on.
+"""vllm-logits: decide whether a failed generation is worth more compute, and what to spend it on.
 
 Load a *specialist* (your fine-tune) and its *ancestor* (the base/reference it came from) into a
 single vLLM model, read per-token divergence off a failed trace in one pass, and either steer the
@@ -6,7 +6,7 @@ decode back toward the suppressed alternative or conclude that no amount of resa
 
 Three dependency tiers, so the cheap parts stay cheap:
 
-  Tier 0  numpy only — always importable, no GPU, no model.
+  Tier 0  numpy only. Always importable, no GPU, no model.
             route / RoutingPolicy / route_scores   pick an operator from features
             Problem / Rollout / load_* / save_*    the input contract
             exact_match / numeric_answer / regex   correctness helpers
@@ -25,7 +25,7 @@ route real failures, and run `python -m vllm_logits.demo` without installing tor
 __version__ = "0.2.0"
 
 # ---------------------------------------------------------------------------
-# Tier 0 — numpy only
+# Tier 0: numpy only
 # ---------------------------------------------------------------------------
 from .routing import (
     DEFAULT_MAPPING, DEFAULT_FALLBACK, RoutingPolicy, route, route_scores, zscore,
@@ -37,13 +37,13 @@ from .io import (
 
 __all__ = [
     "__version__",
-    # Tier 0 — routing
+    # Tier 0: routing
     "route", "route_scores", "zscore", "RoutingPolicy",
     "DEFAULT_MAPPING", "DEFAULT_FALLBACK",
-    # Tier 0 — input contract
+    # Tier 0: input contract
     "Problem", "Rollout", "load_problems", "load_rollouts", "load_jsonl",
     "save_jsonl", "exact_match", "numeric_answer", "regex",
-    # Tier 1 — torch
+    # Tier 1: torch
     "LogitStore",
     "entropy_gap", "chi2_divergence", "adaptive_alpha", "mixing_diagnostics",
     "JunctionContext", "RepairContext",
@@ -51,12 +51,12 @@ __all__ = [
     "MatchedPositionDetector", "PageHinkleyDetector", "calibrate_ph_threshold",
     "find_firing_position",
     "compute_scores_at_t", "estimate_background",
-    # Tier 2 — vLLM
+    # Tier 2: vLLM
     "LogitPipeline", "VllmCacheLogitsEngine", "LogitRepairEngine",
 ]
 
 # ---------------------------------------------------------------------------
-# Tier 1 / Tier 2 — lazy, with an actionable message when the extra is missing
+# Tier 1 and Tier 2: lazy, with an actionable message when the extra is missing
 # ---------------------------------------------------------------------------
 _TIER1 = {
     "LogitStore": "storage",

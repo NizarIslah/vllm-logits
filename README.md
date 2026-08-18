@@ -4,19 +4,30 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![arXiv](https://img.shields.io/badge/arXiv-2606.05145-b31b1b.svg)](https://arxiv.org/abs/2606.05145)
 
-**A toolkit for two-model logit interventions on top of [vLLM](https://github.com/vllm-project/vllm).**
+### Your fine-tune failed a problem. Should you spend more samples, or is it structural?
 
-It loads two models — a *specialist* (e.g. your fine-tune) and an *ancestor* (e.g. its
-base/reference) — into a single vLLM model so you can **mix or steer their logits at decode time
-with no extra forward passes**, and it ships a small pipeline that uses this to:
+Sampling again is the default answer, and it is often the wrong one. Some failures are unlucky
+draws. Others are a trajectory the model will re-derive at any temperature, so more rollouts buy the
+same wrong answer again. `vllm-logits` reads which is which off the failed generation itself, in one
+pass, and names the intervention that fixes the recoverable ones.
 
-1. **extract per-token features** from failed generations (how far the specialist diverged from the
-   ancestor at each step), and
-2. **repair** those failures by nudging decoding back toward the ancestor's suppressed alternatives,
-   then report which failures were fixable and how.
+It loads your fine-tune (the *specialist*) and the model it was trained from (the *ancestor*) into a
+single vLLM model, so comparing them costs **no extra forward pass**.
 
-Everything is driven by plain inputs — two model paths, your prompts, your rollouts, and a one-line
-correctness function — so it runs on **any model and any task**, on any cluster or a single GPU.
+```bash
+pip install git+https://github.com/NizarIslah/vllm-logits
+python -m vllm_logits.demo        # 1,423 real failed problems, no GPU, about a minute
+```
+
+Two stages:
+
+1. **extract per-token features** from failed generations, measuring how far the specialist drifted
+   from the ancestor at each step, and where the failure was decided.
+2. **repair** those failures by steering decoding back toward the alternative the ancestor still
+   ranks highly, then report which failures were fixable and by which operator.
+
+Inputs are plain: two model paths, your prompts, your rollouts, and a one-line correctness function.
+It runs on any model and any task, on a cluster or a single GPU.
 
 ```python
 from vllm_logits import LogitPipeline, numeric_answer
@@ -29,7 +40,7 @@ pipe = LogitPipeline(
     continuation_mode="temperature",      # how to decode after an intervention (see below)
 )
 
-# Inputs are plain dicts (or JSONL) — no framework objects, no registries:
+# Inputs are plain dicts (or JSONL). No framework objects, no registries:
 #   problem = {"problem_id": str, "prompt": str, "answer": ...}
 #   rollout = {"problem_id": str, "rollout_idx": int, "generated_text": str, "is_correct"?: bool}
 
@@ -44,20 +55,19 @@ results = pipe.run(
 # You can also call the two stages separately: pipe.cache_logits(...) then pipe.repair(...).
 ```
 
-## Try it in one minute, with no GPU
+## The demo, in more detail
 
 ```bash
-pip install git+https://github.com/NizarIslah/vllm-logits
-python -m vllm_logits.demo
+python -m vllm_logits.demo                      # all cells
+python -m vllm_logits.demo --cell sft0p6b\|gsm8k  # one model and task
+python -m vllm_logits.demo --plot panel.png     # also write the figure
 ```
 
-That installs numpy and nothing else, and runs on 1,423 real failed problems shipped with the package
-(four post-trained models, three tasks — see
+The core install is numpy and nothing else. The demo runs on 1,423 real failed problems shipped with
+the package, from four post-trained models across three tasks (provenance:
 [`src/vllm_logits/data/README.md`](src/vllm_logits/data/README.md)). It prints how many failures are
 worth more sampling, how many need a different intervention, how many are beyond reach, and whether
-routing each failure by its features beats committing to one intervention. Add
-`--plot panel.png` (with `pip install "vllm-logits[demo]"`) for the figure, or `--cell <cell>` to look
-at one model×task at a time.
+routing each failure by its features beats committing to one intervention everywhere.
 
 ## Install
 
@@ -69,13 +79,13 @@ pip install "git+https://github.com/NizarIslah/vllm-logits#egg=vllm-logits[engin
 | install | needs | gives you |
 |---|---|---|
 | core | numpy | `route()` on your own features, the input contract, `python -m vllm_logits.demo` |
-| `[engine]` | + vLLM 0.15.x, torch, transformers | `LogitPipeline` — loading models, extracting features, running operators |
+| `[engine]` | + vLLM 0.15.x, torch, transformers | `LogitPipeline`: loading models, extracting features, running operators |
 | `[demo]` | + matplotlib | the demo's figure |
 | `[dev]` | + pytest | the test suite |
 
-Requires **Python ≥ 3.10**; the engine extra pins **`vllm` 0.15.x** (see
+Requires **Python 3.10 or newer**. The engine extra pins **`vllm` 0.15.x** (see
 [Compatibility](#compatibility)). `import vllm_logits` never imports torch or vLLM, so the core
-install stays laptop-light; asking for an engine symbol without the extra raises an error naming the
+install stays light. Asking for an engine symbol without the extra raises an error naming the
 install command. Not on PyPI yet.
 
 ## How it works
@@ -109,40 +119,53 @@ install command. Not on PyPI yet.
 - **Two backbones in one model.** `backbones.py` defines `DualQwen2/Llama/Phi3ForCausalLM`: a single
   vLLM model that loads both checkpoints and exposes both logit streams before the LM head, so a
   logits processor can combine them with zero extra passes. `arch="auto"` picks the right one from
-  the model's config; adding a new architecture is one subclass + one registration line.
+  the model's config. Adding a new architecture is one subclass plus one registration line.
 - **Logits processors** (`processors/`): `inject` (target chosen positions), `proxy_tuning`
-  (specialist + α·(specialist − ancestor) style arithmetic — a reference implementation of
-  [proxy-tuning](https://arxiv.org/abs/2401.08565), which is similar in spirit to our logit
-  steering), `cross_arch` (mismatched tokenizers), and `logit_repair` (the steering processor used
+  (specialist + α·(specialist − ancestor) style arithmetic, a reference implementation of
+  [proxy-tuning](https://arxiv.org/abs/2401.08565), which is similar in spirit to the logit
+  steering here), `cross_arch` (mismatched tokenizers), and `logit_repair` (the steering processor used
   by the repair stage).
 - **Feature extraction** (`features.py`, the `cache_logits` stage): for each failed rollout it runs
-  two batched prefills and stores per-token features — the specialist↔ancestor divergence on the
-  taken token (`Delta_path`), coverage-set divergence (`G_cov`), logit variance / entropy, local KL,
-  and a combined `J_approx` (every feature is defined in
-  [docs/logit-features.md](docs/logit-features.md)). The **junction** is the window of tokens
-  (around the `J_approx` peak) where the failure was decided; it is where the targeted operators act.
-- **Repair** (`repair.py`, the `repair_logits` stage): it applies each operator and re-decodes —
-  sparse logit steering and local temperature lift fire **at the junction**, random-position steer
-  at a control position, and dense steer over the whole trace — reporting whether the result is
-  correct at each `k`.
+  two batched prefills and stores per-token features. Those are the specialist to ancestor
+  divergence on the taken token (`Delta_path`), coverage-set divergence (`G_cov`), logit variance,
+  entropy, local KL, and a combined `J_approx`. Every feature is defined in
+  [docs/logit-features.md](docs/logit-features.md). The **junction** is the window of tokens around
+  the `J_approx` peak where the failure was decided, and it is where the targeted operators act.
+- **Repair** (`repair.py`, the `repair_logits` stage): it applies each operator and re-decodes,
+  then reports whether the result is correct at each `k`. Sparse logit steering and local temperature
+  lift fire **at the junction**, random-position steer fires at a control position, and dense steer
+  applies over the whole trace.
 
 ### `continuation_mode`
 
-After an intervention fires, the rest of the sequence is decoded one of two ways (applied uniformly
-to every operator):
+After an intervention fires, the rest of the sequence is decoded one of two ways, applied uniformly
+to every operator:
 
 | mode | post-intervention decode | use it for |
 |---|---|---|
-| `temperature` *(default)* | sample the specialist at `T` (same as the retry baseline) | **production** — the realistic recoverability number |
-| `greedy` | argmax of the specialist | **analysis** — isolates the intervention (a rescue is attributable to the steer, not to lucky downstream sampling) |
+| `temperature` *(default)* | sample the specialist at `T` (same as the retry baseline) | **production**, the realistic recoverability number |
+| `greedy` | argmax of the specialist | **analysis**, which isolates the intervention so a rescue is attributable to the steer rather than to lucky downstream sampling |
 
-## Worked example 1 — three outcomes of a failure, explained by features
+## How this differs from other logit-space methods
 
-`examples/showcase_three_regimes.py` runs on **Qwen3-0.6B** (specialist) vs. **Qwen3-0.6B-Base**
-(ancestor) over a small set of simple arithmetic problems (e.g. `Compute 17 * 23. Put the final
-answer in \boxed{}.`). It takes the problems the specialist fails on every sampled rollout and
-classifies what (if anything) rescues each, alongside the junction-feature profile. **The output
-below is real** (regenerated by the script):
+| | What it does | Relationship to this |
+|---|---|---|
+| **Best-of-N, self-consistency** | draw more samples from the same distribution | This decides whether that will work before you pay for it. Complementary: the answer is often "yes, resample". |
+| **Proxy tuning** | steer a large model using the delta between a tuned and untuned small pair | Same operator class, and shipped here as a reference implementation (`processors/proxy_tuning.py`). The difference is that this is diagnostic first: it localizes where to steer, and whether steering is the right move at all. |
+| **DoLa, contrastive decoding** | contrast layers or model sizes to improve factuality, applied uniformly | Uniform application, no diagnostic for which failures to apply it to. Here the contrast is against a separate ancestor checkpoint and fires at one detected position. |
+| **Speculative decoding** | two models for throughput, outputs unchanged | Two models for diagnosis, outputs deliberately changed. |
+
+The distinction that matters: those methods change generation. This one first decides whether
+changing generation can help, then picks the change. It is not a claim to beat them. There is no
+head-to-head comparison here, and the paper lists that as a limitation.
+
+## Worked example 1: three outcomes of a failure, explained by features
+
+`examples/showcase_three_regimes.py` runs on **Qwen3-0.6B** (specialist) against
+**Qwen3-0.6B-Base** (ancestor) over a small set of simple arithmetic problems, for example
+`Compute 17 * 23. Put the final answer in \boxed{}.`. It takes the problems the specialist fails on
+every sampled rollout and classifies what, if anything, rescues each, alongside the junction-feature
+profile. **The output below is real**, regenerated by the script:
 
 ```
 PROBLEM    retry  rand   geoP   geoW   dense  Ltemp    V_traj  V_junc   kl_jc  Gcov_jc  Dpath_jc
@@ -155,39 +178,40 @@ p14        -      -      -      -      -      -         0.119   0.196    5.60   
 regime counts: {'SAMPLING': 7, 'STEERABLE': 3, 'HARD': 4}
 ```
 
-Columns are the operators (`OK` = rescued at some `k`): `retry` (resample), `rand` (ancestor
-injection at a random position), `geoP`/`geoW` (sparse steer at the detected junction vs. a control
-position), `dense` (steer at every position), `Ltemp` (local temperature lift). The right-hand columns
-are the junction-feature profile (`V_traj`, `V_junc`, KL, `G_cov`, `Delta_path` at the junction).
+Columns are the operators, where `OK` means rescued at some `k`: `retry` (resample), `rand`
+(ancestor injection at a random position), `geoP` and `geoW` (sparse steer at the detected junction
+versus a control position), `dense` (steer at every position), `Ltemp` (local temperature lift). The
+right-hand columns are the junction-feature profile (`V_traj`, `V_junc`, KL, `G_cov`, `Delta_path` at
+the junction).
 
-- **SAMPLING** — plain resampling fixes it; the first failure was just an unlucky draw.
-- **STEERABLE** — resampling fails, but a logit intervention fixes it: the correct alternative was
+- **SAMPLING**: plain resampling fixes it. The first failure was an unlucky draw.
+- **STEERABLE**: resampling fails, but a logit intervention fixes it. The correct alternative was
   present but suppressed, and steering toward the ancestor surfaces it.
-- **HARD** — nothing fixes it. Notice `Gcov_jc` collapses to ~0.02 on the hard multiplications: the
-  ancestor is *also* wrong there, so there is no correct alternative to steer toward. That collapse
-  is the readable signature of a genuinely unrecoverable failure.
+- **HARD**: nothing fixes it. Notice `Gcov_jc` collapses to about 0.02 on the hard multiplications.
+  The ancestor is *also* wrong there, so there is no correct alternative to steer toward. That
+  collapse is the readable signature of a genuinely unrecoverable failure.
 
-## Worked example 2 — routing failures to a repair operator from features alone
+## Worked example 2: routing failures to a repair operator from features alone
 
-`examples/showcase_clustering.py` reduces each failed problem to **three trajectory features**, and
-each feature maps to the one operator it makes actionable:
+`examples/showcase_clustering.py` reduces each failed problem to **three trajectory features**. Each
+feature maps to the one operator it makes actionable:
 
 | feature | definition | routes to |
 |---|---|---|
-| **spread** | `J_frac+` — fraction of trace tokens with `J_approx > 0` (how broad the divergence is) | `dense steer` |
-| **concentration** | `log10(J_max / J_mean)` — one sharp spike vs. diffuse | `sparse steer` |
-| **logit dispersion** (temperature sensitivity) | `log10(V_t*)` — variance of the specialist's logits at the junction; how strongly the token responds to a temperature change | `local temperature lift` |
+| **spread** | `J_frac+`, the fraction of trace tokens with `J_approx > 0` (how broad the divergence is) | `dense steer` |
+| **concentration** | `log10(J_max / J_mean)`: one sharp spike versus diffuse | `sparse steer` |
+| **logit dispersion** (temperature sensitivity) | `log10(V_t*)`, the variance of the specialist's logits at the junction: how strongly the token responds to a temperature change | `local temperature lift` |
 
 The **prospective routing rule** z-scores the three features per problem and routes each failure to
-the operator whose feature is largest (`argmax`, no gate) — read from the failed trace alone, no
+the operator whose feature is largest (`argmax`, no gate). It reads the failed trace alone, with no
 repair outcomes needed.
 
 A **single panel** carries both signals on every point, over a 2-D projection of the three features:
 the **color** is the operator the feature rule picks, and the **label** is the failure's empirical
-recoverability at a best-of-3 budget — `retry-solvable` (plain resampling fixes it; no routing needed)
-or `hard` (it doesn't, so a logit intervention or a local-temperature lift is what can still help —
-the paper's routing target). In Example 1's terms, `retry-solvable` is the SAMPLING regime and `hard`
-is STEERABLE and HARD combined.
+recoverability at a best-of-3 budget. `retry-solvable` means plain resampling fixes it and no routing
+is needed. `hard` means it does not, so a logit intervention or a local temperature lift is what can
+still help, which is the paper's routing target. In Example 1's terms, `retry-solvable` is the
+SAMPLING regime and `hard` is STEERABLE and HARD combined.
 
 ![Each failure: routed operator (color) and retry-solvable vs. hard (label)](docs/clustering.png)
 
@@ -203,34 +227,37 @@ recoverability (empirical): {'retry-solvable': 13, 'hard': 7}
 over 20 failing problems
 ```
 
-Each routed bucket has its own signature feature highest — `dense steer` the highest `spread`,
-`sparse steer` the highest `concentration`, `local temperature lift` the highest `logit dispersion` —
-so the rule reads the same way on your own data. (This is a 0.6B arithmetic toy, so the split is
-illustrative; on harder real cells the `hard` set is the routing target population, exactly as in the
-paper.) Results are cached to `docs/clustering_data.json` so re-plotting needs no GPU — delete it or
-set `VLLM_LOGITS_FORCE=1` to recompute.
+Each routed bucket has its own signature feature highest. `dense steer` has the highest `spread`,
+`sparse steer` the highest `concentration`, and `local temperature lift` the highest
+`logit dispersion`, so the rule reads the same way on your own data.
+
+Scope: this runnable example uses a 0.6B pair on arithmetic so that it fits on one GPU, which makes
+the split illustrative rather than a result. The shipped demo data
+(`python -m vllm_logits.demo`) is the real thing: 1,423 failed problems from post-trained 0.6B to 4B
+models on GSM8K, CruxEval and GPQA. Results here are cached to `docs/clustering_data.json` so
+re-plotting needs no GPU. Delete it or set `VLLM_LOGITS_FORCE=1` to recompute.
 
 ## API reference
 
 | Module | Contents |
 |---|---|
-| `pipeline.py` | `LogitPipeline` — the one entry point (`.run`, `.cache_logits`, `.repair`). |
-| `backbones.py` | `DualQwen2/Llama/Phi3ForCausalLM` (+ a repair variant): two checkpoints in one vLLM model, mixable logits. |
-| `processors/` | `inject`, `proxy_tuning`, `cross_arch`, `logit_repair` (the steering processor with `continuation_mode`). |
-| `register.py` | `register_dual_{qwen,llama,phi3}` — vLLM ModelRegistry shims (auto-loaded, see below). |
-| `features.py` | `cache_logits`: per-token features (`Delta_path`, `G_cov`, `logit_var`, `entropy`, `kl_div`, `J_approx`; defined in [docs/logit-features.md](docs/logit-features.md)) via two batched prefills. |
+| `pipeline.py` | `LogitPipeline`, the one entry point (`.run`, `.cache_logits`, `.repair`). |
+| `backbones.py` | `DualQwen2/Llama/Phi3ForCausalLM` plus a repair variant: two checkpoints in one vLLM model, mixable logits. |
+| `processors/` | `inject`, `proxy_tuning`, `cross_arch` and `logit_repair`, the steering processor with `continuation_mode`. |
+| `register.py` | `register_dual_{qwen,llama,phi3}`, vLLM ModelRegistry shims, auto-loaded (see below). |
+| `features.py` | `cache_logits`: per-token features (`Delta_path`, `G_cov`, `logit_var`, `entropy`, `kl_div`, `J_approx`, defined in [docs/logit-features.md](docs/logit-features.md)) via two batched prefills. |
 | `scoring.py` | `compute_scores_at_t`, `estimate_background`, and reference (HF) engines. |
-| `junctions.py` | junction detectors (Page-Hinkley, divergence, coverage, random) + offline firing on cached features. |
-| `repair.py` | `LogitRepairEngine`: batched operator × `k` sweep. |
-| `storage.py` | `LogitStore` — feature cache as `.pt` or parquet shards, format auto-detected on read. |
-| `io.py` | the input contract: `Problem`/`Rollout` dicts, JSONL helpers, and `exact_match` / `numeric_answer` / `regex` correctness defaults. |
-| `routing.py` | `route`, `route_scores`, `RoutingPolicy` — the feature→operator rule, pure numpy (no vLLM, no GPU). |
-| `demo.py` | `python -m vllm_logits.demo` — the worked example on shipped data. |
+| `junctions.py` | junction detectors (Page-Hinkley, divergence, coverage, random) plus offline firing on cached features. |
+| `repair.py` | `LogitRepairEngine`: batched operator by `k` sweep. |
+| `storage.py` | `LogitStore`, feature cache as `.pt` or parquet shards, format auto-detected on read. |
+| `io.py` | the input contract: `Problem` and `Rollout` dicts, JSONL helpers, and the `exact_match`, `numeric_answer` and `regex` correctness defaults. |
+| `routing.py` | `route`, `route_scores`, `RoutingPolicy`: the feature to operator rule, pure numpy, no vLLM and no GPU. |
+| `demo.py` | `python -m vllm_logits.demo`, the worked example on shipped data. |
 | `alpha.py` | `entropy_gap`, `chi2_divergence`, `adaptive_alpha`. |
-| `_compat.py` | every vLLM-internal import, isolated in one place (the version-bump firewall). |
+| `_compat.py` | every vLLM-internal import, isolated in one place: the version-bump firewall. |
 
-Registration is automatic: the package declares a `vllm.general_plugins` entry point, so the dual
-backbones are registered in every vLLM process (including spawned workers) without you calling
+Registration is automatic. The package declares a `vllm.general_plugins` entry point, so the dual
+backbones are registered in every vLLM process, including spawned workers, without you calling
 `register_*()`.
 
 ## Tests
@@ -247,8 +274,8 @@ PYTHONPATH=src python -m pytest tests/test_dual_load_qwen.py tests/test_dual_loa
 ## Supported model families
 
 `arch="auto"` reads the model's `config.model_type` and selects the matching dual backbone. The
-specialist and ancestor must share an architecture (they are loaded into one vLLM model). Supported
-families:
+specialist and ancestor must share an architecture, since they are loaded into one vLLM model.
+Supported families:
 
 | `model_type` | dual backbone | example models |
 |---|---|---|
@@ -257,8 +284,8 @@ families:
 | `llama` | `DualLlamaForCausalLM` | Llama-family checkpoints |
 | `olmo2`, `olmo3` | `DualQwen2ForCausalLM` | OLMo-2 / OLMo-3 (Qwen2-shaped) |
 
-Qwen and Phi are verified end-to-end on GPU; Llama and OLMo run through the same backbone code path.
-Anything not listed takes a one-time addition — see below.
+Qwen and Phi are verified end to end on GPU. Llama and OLMo run through the same backbone code path.
+Anything not listed takes a one-time addition, described below.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the dual load, the worker-safe registration, the
 feature extraction and the two firewalls actually work, and
@@ -267,14 +294,14 @@ feature extraction and the two firewalls actually work, and
 ## Adding a new architecture
 
 Subclass `DualQwen2ForCausalLM` in `backbones.py`, add a `register_*` line in `register.py`, and add
-the `model_type → register` entry in `pipeline._ARCH_REGISTER`. The dot-anchored
-`stacked_params_mapping` in `backbones.py` is load-bearing for correct weight loading — keep it.
+the `model_type` to `register` entry in `pipeline._ARCH_REGISTER`. The dot-anchored
+`stacked_params_mapping` in `backbones.py` is load-bearing for correct weight loading, so keep it.
 
 ## Compatibility
 
-Pinned to **`vllm>=0.15,<0.16`** (tested on vLLM 0.15.1 / torch 2.9.1, NVIDIA L40S / A100 / H100).
-The dual backbones subclass vLLM internals, all confined to `_compat.py`; run the dual-load tests
-after a vLLM upgrade — if they stay green, the version is supported.
+Pinned to **`vllm>=0.15,<0.16`**, tested on vLLM 0.15.1 with torch 2.9.1 on NVIDIA L40S, A100 and
+H100. The dual backbones subclass vLLM internals, all confined to `_compat.py`. Run the dual-load
+tests after a vLLM upgrade. If they stay green, the version is supported.
 
 ## Citation
 

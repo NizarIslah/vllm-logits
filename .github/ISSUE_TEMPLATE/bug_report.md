@@ -8,7 +8,7 @@ labels: bug
 
 **What you expected**
 
-**Reproduction** — the smallest thing that shows it. If it involves a model, include both model ids
+**Reproduction**: the smallest thing that shows it. If it involves a model, include both model ids
 (specialist and ancestor) and whether they are local paths or HF ids.
 
 ```python
