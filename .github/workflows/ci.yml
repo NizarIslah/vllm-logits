@@ -78,9 +78,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install torch (CPU wheels) — vLLM is not needed for this test
+      - name: Install torch (CPU wheels) + tokenizer deps — vLLM is not needed for this test
         run: |
           python -m pip install --upgrade pip
           pip install --index-url https://download.pytorch.org/whl/cpu torch
-          pip install -e . pytest pyarrow polars safetensors
+          pip install -e . pytest pyarrow polars safetensors transformers
       - run: pytest tests/test_cache_logits_parquet.py -q
