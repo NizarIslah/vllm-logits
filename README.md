@@ -151,13 +151,20 @@ to every operator:
 | | What it does | Relationship to this |
 |---|---|---|
 | **Best-of-N, self-consistency** | draw more samples from the same distribution | This decides whether that will work before you pay for it. Complementary: the answer is often "yes, resample". |
-| **Proxy tuning** | steer a large model using the delta between a tuned and untuned small pair | Same operator class, and shipped here as a reference implementation (`processors/proxy_tuning.py`). The difference is that this is diagnostic first: it localizes where to steer, and whether steering is the right move at all. |
+| **Proxy tuning** | steer a large model using the delta between a tuned and untuned small pair | Same operator class, and shipped here as a reference implementation (`processors/proxy_tuning.py`). The difference is that this is diagnostic first: it localizes where to steer, and whether steering is the right move at all. The paper reports a budget-matched probe (App. "Preliminary Proxy-Tuning Comparison"). |
 | **DoLa, contrastive decoding** | contrast layers or model sizes to improve factuality, applied uniformly | Uniform application, no diagnostic for which failures to apply it to. Here the contrast is against a separate ancestor checkpoint and fires at one detected position. |
 | **Speculative decoding** | two models for throughput, outputs unchanged | Two models for diagnosis, outputs deliberately changed. |
 
 The distinction that matters: those methods change generation. This one first decides whether
-changing generation can help, then picks the change. It is not a claim to beat them. There is no
-head-to-head comparison here, and the paper lists that as a limitation.
+changing generation can help, then picks the change.
+
+On proxy tuning specifically there is a measured comparison, at a matched single-attempt budget on
+the Qwen3-1.7B specialist's steerable failures. The feature router edges it out on both cells
+(CruxEval 0.376 against 0.352, GPQA 0.174 against 0.120), and proxy tuning beats plain resampling on
+CruxEval but drops below it on GPQA. Read it as a probe rather than a verdict: it is one
+configuration on two cells, and proxy tuning composes a different model pair (a base steered by a
+separately fine-tuned expert) rather than interpolating a failed fine-tune toward its own ancestor.
+Against the other rows in the table there is no head-to-head, and the paper says so.
 
 ## Worked example 1: three outcomes of a failure, explained by features
 
