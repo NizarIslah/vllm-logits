@@ -200,6 +200,114 @@ the junction).
 
 ## Worked example 2: routing failures to a repair operator from features alone
 
+Each failed problem reduces to **three trajectory features**, and each feature maps to the one
+operator it makes actionable:
+
+| feature | definition | routes to |
+|---|---|---|
+| **spread** | `J_frac+`, the fraction of trace tokens with `J_approx > 0` (how broad the divergence is) | `dense steer` |
+| **concentration** | `log10(J_max / J_mean)`: one sharp spike versus diffuse | `sparse steer` |
+| **logit dispersion** (temperature sensitivity) | `log10(V_t*)`, the variance of the specialist's logits at the junction: how strongly the token responds to a temperature change | `local temperature lift` |
+
+The **prospective routing rule** z-scores the three features per problem and routes each failure to
+the operator whose feature is largest (`argmax`, no gate). It reads the failed trace alone, with no
+repair outcomes needed, which is what makes it usable on failures you have not tried to fix yet.
+
+Below is the rule applied to a real cell: the 67 failures of a post-trained Qwen3-0.6B on GSM8K where
+resampling stalls. Color is the operator the rule picks. The two axes are a projection of the three
+features, so the groups landing in the corners their features predict is the rule working.
+
+![Which of 67 failures gets which intervention, decided from the failed generation alone](docs/routing_panel.png)
+
+```
+$ python -m vllm_logits.demo --cell 'sft0p6b|gsm8k' --plot docs/routing_panel.png
+
+  routed to                       n     spread  concentr.  dispersion
+  dense steer (whole trace)      26       0.92      -0.49       -0.24
+  sparse steer @ junction        20      -0.88       1.07       -0.37
+  local temperature lift         17      -0.19      -0.21        1.07
+  sparse steer @ random           4      -0.77      -1.26       -1.17
+
+  Rescue rate, best-of-3 attempts:
+
+    routed per failure                 46.3%   <-- the feature rule
+    always dense steer (whole trace)   43.9%   <-- best single choice
+    always sparse steer @ junction     43.0%
+    always local temperature lift      41.7%
+    always sparse steer @ random       39.0%
+    resample again                     24.8%
+```
+
+Each routed group has its own signature feature highest: `dense steer` the highest `spread`,
+`sparse steer` the highest `concentration`, `local temperature lift` the highest `logit dispersion`.
+On this cell, routing per failure beats committing to any one operator everywhere, and beats
+resampling by a wide margin.
+
+Scope, because it matters: this is one cell of the eight that ship with the package. Which
+intervention wins is model- and task-dependent, and on other cells a fixed operator can match or beat
+the rule. Run `--cell` on the others rather than assuming this ordering transfers, and run it on your
+own failures before trusting it there.
+
+A GPU version of the same panel, computed end to end from two checkpoints rather than from shipped
+features, is `examples/showcase_clustering.py`. It uses a 0.6B pair on arithmetic so it fits on one
+GPU, which makes its particular split illustrative rather than a result. Its output caches to
+`docs/clustering_data.json`, so re-plotting needs no GPU; delete it or set `VLLM_LOGITS_FORCE=1` to
+recompute.
+
+## How this differs from other logit-space methods
+
+| | What it does | Relationship to this |
+|---|---|---|
+| **Best-of-N, self-consistency** | draw more samples from the same distribution | This decides whether that will work before you pay for it. Complementary: the answer is often "yes, resample". |
+| **Proxy tuning** | steer a large model using the delta between a tuned and untuned small pair | Same operator class, and shipped here as a reference implementation (`processors/proxy_tuning.py`). The difference is that this is diagnostic first: it localizes where to steer, and whether steering is the right move at all. The paper reports a budget-matched probe (App. "Preliminary Proxy-Tuning Comparison"). |
+| **DoLa, contrastive decoding** | contrast layers or model sizes to improve factuality, applied uniformly | Uniform application, no diagnostic for which failures to apply it to. Here the contrast is against a separate ancestor checkpoint and fires at one detected position. |
+| **Speculative decoding** | two models for throughput, outputs unchanged | Two models for diagnosis, outputs deliberately changed. |
+
+The distinction that matters: those methods change generation. This one first decides whether
+changing generation can help, then picks the change.
+
+On proxy tuning specifically there is a measured comparison, at a matched single-attempt budget on
+the Qwen3-1.7B specialist's steerable failures. The feature router edges it out on both cells
+(CruxEval 0.376 against 0.352, GPQA 0.174 against 0.120), and proxy tuning beats plain resampling on
+CruxEval but drops below it on GPQA. Read it as a probe rather than a verdict: it is one
+configuration on two cells, and proxy tuning composes a different model pair (a base steered by a
+separately fine-tuned expert) rather than interpolating a failed fine-tune toward its own ancestor.
+Against the other rows in the table there is no head-to-head, and the paper says so.
+
+## Worked example 1: three outcomes of a failure, explained by features
+
+`examples/showcase_three_regimes.py` runs on **Qwen3-0.6B** (specialist) against
+**Qwen3-0.6B-Base** (ancestor) over a small set of simple arithmetic problems, for example
+`Compute 17 * 23. Put the final answer in \boxed{}.`. It takes the problems the specialist fails on
+every sampled rollout and classifies what, if anything, rescues each, alongside the junction-feature
+profile. **The output below is real**, regenerated by the script:
+
+```
+PROBLEM    retry  rand   geoP   geoW   dense  Ltemp    V_traj  V_junc   kl_jc  Gcov_jc  Dpath_jc
+p5         -      OK     OK     -      -      OK        0.151   0.143    1.06    0.195     1.231   [STEERABLE]
+p11        -      -      -      -      -      OK        0.102   0.181   11.50    0.032     1.586   [STEERABLE]
+p2         OK     OK     -      OK     -      OK        0.161   0.288   12.37    0.087     1.963   [SAMPLING]
+p3         OK     OK     OK     -      -      OK        0.154   0.268    8.75    0.121     2.105   [SAMPLING]
+p9         -      -      -      -      -      -         0.108   0.222    4.16    0.018     1.948   [HARD]   739*856
+p14        -      -      -      -      -      -         0.119   0.196    5.60    0.019     1.869   [HARD]   12345*6789
+regime counts: {'SAMPLING': 7, 'STEERABLE': 3, 'HARD': 4}
+```
+
+Columns are the operators, where `OK` means rescued at some `k`: `retry` (resample), `rand`
+(ancestor injection at a random position), `geoP` and `geoW` (sparse steer at the detected junction
+versus a control position), `dense` (steer at every position), `Ltemp` (local temperature lift). The
+right-hand columns are the junction-feature profile (`V_traj`, `V_junc`, KL, `G_cov`, `Delta_path` at
+the junction).
+
+- **SAMPLING**: plain resampling fixes it. The first failure was an unlucky draw.
+- **STEERABLE**: resampling fails, but a logit intervention fixes it. The correct alternative was
+  present but suppressed, and steering toward the ancestor surfaces it.
+- **HARD**: nothing fixes it. Notice `Gcov_jc` collapses to about 0.02 on the hard multiplications.
+  The ancestor is *also* wrong there, so there is no correct alternative to steer toward. That
+  collapse is the readable signature of a genuinely unrecoverable failure.
+
+## Worked example 2: routing failures to a repair operator from features alone
+
 `examples/showcase_clustering.py` reduces each failed problem to **three trajectory features**. Each
 feature maps to the one operator it makes actionable:
 

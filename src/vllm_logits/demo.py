@@ -135,7 +135,8 @@ def routing_report(d: dict[str, np.ndarray], cell: str | None = None) -> dict:
     verdict = ("routing beats every fixed choice" if delta >= 0
                else f"the fixed choice '{PRETTY.get(best_fixed, best_fixed)}' wins here")
     print(f"\n  -> {verdict} ({delta:+.1f} pp vs. the best single choice).")
-    return {"routed": float(routed.mean()),
+    return {"scope": scope, "n_steerable": int(steer.sum()),
+            "routed": float(routed.mean()),
             "fixed": fixed, "best_fixed": best_fixed, "delta_pp": float(delta),
             "ops": ops, "z": z, "labels": labels[steer]}
 
@@ -160,10 +161,15 @@ def plot(res: dict, path: Path) -> bool:
                    c=colors.get(op, "#868E96"), label=f"{PRETTY.get(op, op)}  (n={int(m.sum())})")
     ax.axhline(0, color="#CED4DA", lw=.8, zorder=0)
     ax.axvline(0, color="#CED4DA", lw=.8, zorder=0)
-    ax.set_xlabel("concentrated divergence  →\n← broad divergence", fontsize=10)
-    ax.set_ylabel("← temperature-insensitive        temperature-sensitive  →", fontsize=10)
-    ax.set_title("Which intervention each failed generation is routed to\n"
-                 "(read from the failed trace alone)", fontsize=12, pad=12)
+    ax.set_xlabel("← divergence spread broadly          divergence concentrated at one point →",
+                  fontsize=10)
+    ax.set_ylabel("responds to temperature  →", fontsize=10)
+    scope = res.get("scope", "")
+    n = res.get("n_steerable")
+    where = f" ({scope})" if scope and scope != "all cells" else ""
+    ax.set_title(f"Which of {n} failures gets which intervention{where},\n"
+                 "decided from the failed generation alone",
+                 fontsize=12.5, pad=12)
     ax.legend(frameon=False, fontsize=9, loc="upper left", bbox_to_anchor=(0, -0.16), ncol=2)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
